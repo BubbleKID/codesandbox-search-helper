@@ -14,33 +14,41 @@ function isAlgoliaSearch(url) {
   return /\/queries\?/.test(url) && /x-algolia-agent=/.test(url);
 }
 
+function toYMD(epochSec) {
+  const d = new Date(epochSec * 1000);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function onRequestFinished(request) {
   const url = request?.request?.url;
   if (!isAlgoliaSearch(url)) return;
 
   append(`🎯 ALGOLIA SEARCH URL: ${url}`);
 
-  // Log the response body like Algolia Analyzer does
-  try {
-    request.getContent((content) => {
-      if (!content) {
-        append('ℹ️ No response body to parse.');
-        return;
+  // Parse response and forward minimal data to the inspected page
+  request.getContent((content) => {
+    try {
+      if (!content) return;
+      const data = JSON.parse(content);
+      const hits = data?.results?.[0]?.hits || [];
+      const mapped = hits
+        .filter(h => h.objectID && h.inserted_at)
+        .map(h => ({ id: h.objectID, insertedYMD: toYMD(h.inserted_at) }));
+
+      if (mapped.length > 0) {
+        append(`📦 hits with dates: ${mapped.length}`);
+        // Send to inspected window via window.postMessage injection
+        const payload = { type: 'ALGOLIA_DATES', items: mapped };
+        const js = `window.postMessage(${JSON.stringify(payload)}, '*');`;
+        chrome.devtools.inspectedWindow.eval(js);
       }
-      try {
-        const data = JSON.parse(content);
-        console.log('🔎 ALGOLIA RESPONSE OBJECT:', data);
-        append('✅ Parsed Algolia response');
-        const hits = data?.results?.[0]?.hits || [];
-        append(`📦 hits on this page: ${hits.length}`);
-      } catch (e) {
-        append(`⚠️ Failed to parse response JSON: ${e && e.message ? e.message : e}`);
-        console.log('📄 Raw content:', content);
-      }
-    });
-  } catch (e) {
-    append(`⚠️ request.getContent error: ${e && e.message ? e.message : e}`);
-  }
+    } catch (e) {
+      append(`⚠️ Failed to parse/forward response: ${e && e.message ? e.message : e}`);
+    }
+  });
 }
 
 append('DevTools panel loaded. Waiting for requests...');

@@ -2,95 +2,113 @@
 
 class CodeSandboxDateTagger {
   constructor() {
-    this.dateTag = "2025-07-29"; // Fixed date for now
+    this.dateTag = "2025-07-29"; // default fallback
+    this.sandboxIdToDate = new Map(); // id -> YYYY-MM-DD
+    this.processTimer = null;
+    this.isProcessing = false;
     console.log('CodeSandbox Date Tagger: Starting...');
     this.init();
   }
 
   init() {
+    // Listen for messages coming from DevTools panel via window.postMessage
+    window.addEventListener('message', (event) => {
+      const msg = event?.data;
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type === 'ALGOLIA_DATES' && Array.isArray(msg.items)) {
+        msg.items.forEach(({ id, insertedYMD }) => {
+          if (id && insertedYMD) this.sandboxIdToDate.set(id, insertedYMD);
+        });
+        // After receiving new dates, refresh current results (debounced)
+        this.scheduleProcess();
+      }
+    });
+
     this.observeSearchResults();
-    // Process existing results on page load
-    setTimeout(() => {
-      this.processSearchResults();
-    }, 1000);
+    this.scheduleProcess(300);
+  }
+
+  scheduleProcess(delay = 100) {
+    if (this.processTimer) clearTimeout(this.processTimer);
+    this.processTimer = setTimeout(() => this.processSearchResults(), delay);
   }
 
   observeSearchResults() {
-    console.log('Setting up search result observer...');
-
-    // Use MutationObserver to watch for new search results
     const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          console.log('DOM changed, processing search results...');
-          this.processSearchResults();
+      for (const m of mutations) {
+        if (m.type === 'childList') {
+          // Skip if the only changes are our own tag insertions
+          const added = Array.from(m.addedNodes || []);
+          const onlyOwn = added.length > 0 && added.every((n) =>
+            n.nodeType === 1 && (n.classList?.contains('csb-date-tag') || n.querySelector?.('.csb-date-tag'))
+          );
+          if (!onlyOwn) {
+            this.scheduleProcess();
+            break;
+          }
         }
-      });
+      }
     });
-
-    // Start observing the document for changes
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   processSearchResults() {
-    const searchResults = this.findSearchResultItems();
-    console.log('Found', searchResults.length, 'search result items');
+    if (this.isProcessing) return;
+    this.isProcessing = true;
+    try {
+      const searchResults = this.findSearchResultItems();
+      if (!searchResults.length) return;
 
-    if (!searchResults.length) return;
-
-    searchResults.forEach((result, index) => {
-      this.addDateTag(result);
-    });
+      searchResults.forEach((result) => {
+        const sandboxId = this.extractSandboxId(result);
+        const date = (sandboxId && this.sandboxIdToDate.get(sandboxId)) || this.dateTag;
+        this.addOrUpdateDateTag(result, date);
+      });
+    } finally {
+      this.isProcessing = false;
+    }
   }
 
   findSearchResultItems() {
-    // Look for Algolia search result items
     const selectors = [
       '.ais-Hits-item',
       '[data-testid*="hit"]',
       'li[class*="Hits-item"]',
       'li[class*="hit"]'
     ];
-
     for (const selector of selectors) {
-      const elements = document.querySelectorAll(selector);
-      if (elements.length > 0) {
-        console.log('Found', elements.length, 'items with selector:', selector);
-        return Array.from(elements);
-      }
+      const els = document.querySelectorAll(selector);
+      if (els.length) return Array.from(els);
     }
-
-    console.log('No search result items found');
     return [];
   }
 
-  addDateTag(element) {
-    // Check if date tag already exists
-    const existingTag = element.querySelector('.csb-date-tag');
-    if (existingTag) {
-      return; // Already has a date tag
+  extractSandboxId(element) {
+    // Try image screenshot src first
+    const img = element.querySelector('img[src*="/api/v1/sandboxes/"]');
+    if (img && img.src) {
+      const m = img.src.match(/\/sandboxes\/([a-zA-Z0-9_-]+)\//);
+      if (m) return m[1];
     }
-
-    try {
-      const dateTagElement = this.createDateTagElement(this.dateTag);
-      element.appendChild(dateTagElement);
-      console.log('Added date tag to search result');
-    } catch (error) {
-      console.error('Error adding date tag:', error);
+    // Fallback: any link containing /s/ID
+    const link = element.querySelector('a[href*="/s/"]');
+    if (link && link.href) {
+      const m2 = link.href.match(/\/s\/([a-zA-Z0-9_-]+)/);
+      if (m2) return m2[1];
     }
+    return null;
   }
 
-  createDateTagElement(date) {
-    const tagDiv = document.createElement('div');
-    tagDiv.className = 'csb-date-tag';
-    tagDiv.textContent = date;
-    return tagDiv;
+  addOrUpdateDateTag(element, dateText) {
+    let tag = element.querySelector('.csb-date-tag');
+    if (!tag) {
+      tag = document.createElement('div');
+      tag.className = 'csb-date-tag';
+      element.appendChild(tag);
+    }
+    if (tag.textContent !== dateText) tag.textContent = dateText;
   }
 }
 
-// Initialize the extension when the script loads
 console.log('CodeSandbox Date Tagger: Loading...');
 new CodeSandboxDateTagger();
