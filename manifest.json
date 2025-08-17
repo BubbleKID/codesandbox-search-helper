@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CodeSandbox Date Tags",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Add date tags to CodeSandbox search results",
   "permissions": [
     "activeTab"
@@ -9,6 +9,7 @@
   "host_permissions": [
     "https://codesandbox.io/*"
   ],
+  "devtools_page": "devtools.html",
   "content_scripts": [
     {
       "matches": [
