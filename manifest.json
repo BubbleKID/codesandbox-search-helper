@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "CodeSandbox Date Tags",
+  "version": "1.0.0",
+  "description": "Add date tags to CodeSandbox search results",
+  "permissions": [
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://codesandbox.io/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://codesandbox.io/search*"
+      ],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
