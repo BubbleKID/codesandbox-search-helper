@@ -2,6 +2,8 @@
 
 Adds a small date tag on each result in CodeSandbox search. The date is the sandbox "inserted_at" (created date) from the Algolia search response.
 
+![Search page with date tags](./screenshot.png)
+
 ## Install (unpacked)
 1. Clone or download this repo.
 2. Open Chrome → `chrome://extensions/`.
