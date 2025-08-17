@@ -2,7 +2,7 @@
 
 class CodeSandboxDateTagger {
   constructor() {
-    this.dateTag = "2025-07-29"; // default fallback
+    this.dateTag = "9999-09-09"; // default fallback
     this.sandboxIdToDate = new Map(); // id -> YYYY-MM-DD
     this.processTimer = null;
     this.isProcessing = false;
